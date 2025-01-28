@@ -21,7 +21,7 @@ pub struct Line {
 }
 
 #[derive(Debug)]
-pub struct ParseErrorReportBuilder {
+pub(crate) struct ParseErrorReportBuilder {
     pub error: Vec<ParseErrorBuilder>,
 }
 
@@ -38,7 +38,7 @@ impl ParseErrorReportBuilder {
         self.error.push(err);
     }
 
-    pub fn build(self, text: &str, line_table: &LineTable) -> ParseErrorReport {
+    pub(crate) fn build(self, text: &str, line_table: &LineTable) -> ParseErrorReport {
         ParseErrorReport {
             errors: self
                 .error
@@ -94,7 +94,7 @@ impl Display for ParseErrorType {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ParseErrorBuilder {
+pub(crate) struct ParseErrorBuilder {
     kind: ParseErrorType,
     start: usize,
     end: usize,
