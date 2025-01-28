@@ -1,10 +1,11 @@
 mod backend;
 mod commands;
-pub mod error;
+mod error;
 mod frontend;
 mod nibble;
 
-pub use backend::Runtime;
+pub use error::{ParseError, ParseErrorReport, ParseErrorType};
+pub use backend::{Runtime, StatusBits};
 pub use commands::Command;
 pub use frontend::compile;
 pub use nibble::Nibble;
