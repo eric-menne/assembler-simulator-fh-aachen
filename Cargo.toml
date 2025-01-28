@@ -1,6 +1,7 @@
 [package]
 
 name = "asim"
+description = "A simulator and compiler for the assembly language used in the Technische Informatik course at FH Aachen - University of Applied Sciences"
 version = "0.1.0"
 edition = "2021"
 authors = ["Eric Menne <info@eric-menne.com>"]
