@@ -1,0 +1,10 @@
+[package]
+
+name = "asim"
+version = "0.1.0"
+edition = "2021"
+authors = ["Eric Menne <info@eric-menne.com>"]
+readme = "readme.md"
+repository = "https://github.com/eric-menne/assembler-simulator-fh-aachen"
+publish = false
+
