@@ -44,7 +44,7 @@ up:  STA (15)
     ];
 
     let text = String::from(token_test_code);
-    let mut context = ParseContext::new_empty();
+    let mut context = ParseContext::new_empty(&text);
     let token = tokenize(&text, &mut context);
     assert_eq!(token.len(), token_expected_token.len());
 
@@ -62,11 +62,11 @@ fn test_tokenize_single_line() {
         TokenType::ParenthesisOpen,
         TokenType::Number,
         TokenType::ParenthesisClose,
-        TokenType::End
+        TokenType::End,
     ];
 
     let text = String::from(token_test_code);
-    let mut context = ParseContext::new_empty();
+    let mut context = ParseContext::new_empty(&text);
     let token = tokenize(&text, &mut context);
     assert_eq!(token.len(), token_expected_token.len());
 
@@ -74,7 +74,6 @@ fn test_tokenize_single_line() {
         assert_eq!(t.token_type, token_expected_token[index])
     }
 }
-
 
 #[test]
 fn test_tokenize_empty() {
@@ -85,7 +84,7 @@ fn test_tokenize_empty() {
     ];
 
     let text = String::from(token_test_code);
-    let mut context = ParseContext::new_empty();
+    let mut context = ParseContext::new_empty(&text);
     let token = tokenize(&text, &mut context);
     assert_eq!(token.len(), token_expected_token.len());
 

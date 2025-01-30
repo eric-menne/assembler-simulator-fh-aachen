@@ -32,7 +32,7 @@ mod test;
 /// let commands = compile(text).unwrap();
 /// ```
 pub fn compile(text: &str) -> Result<Vec<Command>, ParseErrorReport> {
-    let mut context = ParseContext::new_empty();
+    let mut context = ParseContext::new_empty(text);
 
     let tokens = tokenize(text, &mut context);
     let mut command_builder = parse_token(&tokens, &mut context);
@@ -85,14 +85,16 @@ pub(crate) struct ParseContext<'a> {
     pub errors: ParseErrorReportBuilder,
     pub line_table: LineTable,
     pub labels: HashMap<&'a str, usize>,
+    pub text: &'a str,
 }
 
-impl ParseContext<'_> {
-    pub fn new_empty() -> Self {
+impl <'a>ParseContext<'a> {
+    pub fn new_empty(text: &'a str) -> Self {
         Self {
             errors: ParseErrorReportBuilder::new(),
             line_table: LineTable::new(),
             labels: HashMap::new(),
+            text
         }
     }
 }
