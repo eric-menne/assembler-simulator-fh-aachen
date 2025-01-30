@@ -34,7 +34,7 @@ fn test_processor_01() {
     while (runtime.instruction_counter as usize) < runtime.ram.len() {
         if counter >= 100 {
             panic!(
-                "To many interations. Infinit loop fail save actived; {:#?}",
+                "To many iterations. Infinite loop fail save activated; {:#?}",
                 runtime
             );
         }
@@ -79,7 +79,7 @@ fn test_processor_02() {
     while (runtime.instruction_counter as usize) < runtime.ram.len() {
         if counter >= 100 {
             panic!(
-                "To many interations. Infinit loop fail save actived; {:#?}",
+                "To many iterations. Infinite loop fail save activated; {:#?}",
                 runtime
             );
         }
