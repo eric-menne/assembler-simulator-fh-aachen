@@ -1,4 +1,4 @@
-use super::{LineInfo, LineTable};
+use super::{LineInfo, ParseContext};
 use std::{iter::Peekable, usize};
 use token::{Token, TokenType};
 
@@ -6,7 +6,7 @@ use token::{Token, TokenType};
 mod test;
 pub mod token;
 
-pub(super) fn tokenize(text: &str, line_table: &mut LineTable) -> Vec<Token> {
+pub(super) fn tokenize(text: &str, context: &mut ParseContext) -> Vec<Token> {
     let mut tokens: Vec<Token> = vec![];
 
     let mut line_start: usize = 0;
@@ -21,7 +21,7 @@ pub(super) fn tokenize(text: &str, line_table: &mut LineTable) -> Vec<Token> {
             ')' => Token::new_single(TokenType::ParenthesisClose, index),
             ':' => Token::new_single(TokenType::Colon, index),
             '\n' => {
-                line_table.push(LineInfo {
+                context.line_table.push(LineInfo {
                     start: line_start,
                     end: index,
                 });
@@ -31,7 +31,7 @@ pub(super) fn tokenize(text: &str, line_table: &mut LineTable) -> Vec<Token> {
             '/' => {
                 let token = check_for_comment(&mut cursor, index);
                 if token.token_type == TokenType::NewLine {
-                    line_table.push(LineInfo {
+                    context.line_table.push(LineInfo {
                         start: line_start,
                         end: index,
                     });
@@ -49,7 +49,7 @@ pub(super) fn tokenize(text: &str, line_table: &mut LineTable) -> Vec<Token> {
         tokens.push(token);
     }
 
-    line_table.push(LineInfo {
+    context.line_table.push(LineInfo {
         start: line_start,
         end: counter,
     });

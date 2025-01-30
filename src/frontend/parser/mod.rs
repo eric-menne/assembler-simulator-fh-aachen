@@ -1,4 +1,4 @@
-use super::lexer::token::{Token, TokenType};
+use super::{lexer::token::{Token, TokenType}, ParseContext};
 use command_builder::CommandBuilder;
 
 use crate::error::{ParseErrorBuilder, ParseErrorReportBuilder, ParseErrorType};
@@ -10,7 +10,7 @@ pub mod operant;
 
 pub fn parse_token<'a>(
     tokens: &'a Vec<Token>,
-    error_report: &mut ParseErrorReportBuilder,
+    context: &mut ParseContext
 ) -> Vec<CommandBuilder<'a>> {
     let mut cursor = tokens.iter().peekable();
     let mut nodes: Vec<CommandBuilder> = vec![];
@@ -18,7 +18,7 @@ pub fn parse_token<'a>(
     skip_white_space(&mut cursor);
 
     loop {
-        let command = parse_command(&mut cursor, error_report);
+        let command = parse_command(&mut cursor, context);
         match command {
             Some(c) => nodes.push(c),
             None => move_to_next_line(&mut cursor),
@@ -67,14 +67,14 @@ where
 
 fn parse_command<'a, I>(
     cursor: &mut Peekable<I>,
-    errors: &mut ParseErrorReportBuilder,
+    context: &mut ParseContext
 ) -> Option<CommandBuilder<'a>>
 where
     I: Iterator<Item = &'a Token>,
 {
     let token = cursor.next()?;
     token.ensure_type(TokenType::Symbol, || {
-        errors.add(ParseErrorBuilder::new(
+        context.errors.add(ParseErrorBuilder::new(
             ParseErrorType::MissingInstruction,
             token.start,
             token.end,
@@ -84,7 +84,7 @@ where
     let next_token = match cursor.peek() {
         Some(t) => t,
         None => {
-            errors.add(ParseErrorBuilder::new(
+            context.errors.add(ParseErrorBuilder::new(
                 ParseErrorType::MissingOperant,
                 token.start,
                 token.end,
@@ -101,7 +101,7 @@ where
             let instruction = match cursor.next() {
                 Some(t) => t,
                 None => {
-                    errors.add(ParseErrorBuilder::new(
+                    context.errors.add(ParseErrorBuilder::new(
                         ParseErrorType::MissingInstruction,
                         token.start,
                         token.end,
@@ -110,17 +110,17 @@ where
                 }
             };
             instruction.ensure_type(TokenType::Symbol, || {
-                errors.add(ParseErrorBuilder::new(
+                context.errors.add(ParseErrorBuilder::new(
                     ParseErrorType::MissingInstruction,
                     token.start,
                     token.end,
                 ));
             })?;
 
-            let operant = match parse_operant(cursor, errors) {
+            let operant = match parse_operant(cursor, context) {
                 Some(o) => o,
                 None => {
-                    errors.add(ParseErrorBuilder::new(
+                    context.errors.add(ParseErrorBuilder::new(
                         ParseErrorType::MissingOperant,
                         token.start,
                         token.end,
@@ -131,10 +131,10 @@ where
             return Some(CommandBuilder::new(Some(token), instruction, operant));
         }
         _ => {
-            let operant = match parse_operant(cursor, errors) {
+            let operant = match parse_operant(cursor, context) {
                 Some(o) => o,
                 None => {
-                    errors.add(ParseErrorBuilder::new(
+                    context.errors.add(ParseErrorBuilder::new(
                         ParseErrorType::MissingOperant,
                         token.start,
                         token.end,
@@ -149,7 +149,7 @@ where
 
 fn parse_operant<'a, I>(
     cursor: &mut Peekable<I>,
-    errors: &mut ParseErrorReportBuilder,
+    context: &mut ParseContext
 ) -> Option<Operant<'a>>
 where
     I: Iterator<Item = &'a Token>,
@@ -175,7 +175,7 @@ where
             let number = match cursor.next() {
                 Some(t) => t,
                 None => {
-                    errors.add(ParseErrorBuilder::new(
+                    context.errors.add(ParseErrorBuilder::new(
                         ParseErrorType::InvalidFixNumber,
                         token.start,
                         token.end,
@@ -185,7 +185,7 @@ where
             };
 
             number.ensure_type(TokenType::Number, || {
-                errors.add(ParseErrorBuilder::new(
+                context.errors.add(ParseErrorBuilder::new(
                     ParseErrorType::InvalidFixNumber,
                     number.start,
                     number.end,
@@ -201,7 +201,7 @@ where
             let number_token = match cursor.next() {
                 Some(t) => t,
                 None => {
-                    errors.add(ParseErrorBuilder::new(
+                    context.errors.add(ParseErrorBuilder::new(
                         ParseErrorType::InvalidAddress,
                         token.start,
                         token.end,
@@ -211,7 +211,7 @@ where
             };
 
             number_token.ensure_type(TokenType::Number, || {
-                errors.add(ParseErrorBuilder::new(
+                context.errors.add(ParseErrorBuilder::new(
                     ParseErrorType::InvalidAddress,
                     token.start,
                     token.end,
@@ -221,7 +221,7 @@ where
             let close = match cursor.next() {
                 Some(t) => t,
                 None => {
-                    errors.add(ParseErrorBuilder::new(
+                    context.errors.add(ParseErrorBuilder::new(
                         ParseErrorType::MissingParenthesisClose,
                         token.start,
                         number_token.end,
@@ -231,7 +231,7 @@ where
             };
 
             close.ensure_type(TokenType::ParenthesisClose, || {
-                errors.add(ParseErrorBuilder::new(
+                context.errors.add(ParseErrorBuilder::new(
                     ParseErrorType::InvalidAddress,
                     token.start,
                     number_token.end,

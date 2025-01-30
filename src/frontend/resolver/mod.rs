@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use super::parser::command_builder::CommandBuilder;
 use super::parser::operant::OperantKind;
-use super::LineTable;
-use super::ParseErrorReportBuilder;
+use super::ParseContext;
 use crate::commands::{Command, Instruction};
 use crate::error::{ParseErrorBuilder, ParseErrorType};
 
@@ -12,23 +11,16 @@ type LabelTable<'a> = HashMap<&'a str, usize>;
 pub(super) fn resolve<'a>(
     text: &'a str,
     command_builder: &mut Vec<CommandBuilder>,
-    error_report: &mut ParseErrorReportBuilder,
-    line_table: &mut LineTable,
+    context: &mut ParseContext<'a>,
 ) -> Vec<Command> {
-    let label_table = get_label_table(text, command_builder, error_report);
-    convert_to_commands(
-        text,
-        command_builder,
-        &label_table,
-        error_report,
-        line_table,
-    )
+    context.labels = get_label_table(text, command_builder, context);
+    convert_to_commands(text, command_builder, context)
 }
 
 fn get_label_table<'a>(
     text: &'a str,
     command_builder: &Vec<CommandBuilder>,
-    error_report: &mut ParseErrorReportBuilder,
+    context: &mut ParseContext,
 ) -> LabelTable<'a> {
     let mut label_table = HashMap::new();
 
@@ -36,7 +28,7 @@ fn get_label_table<'a>(
         if let Some(label) = command.label {
             let label_identifier = label.resolve(text);
             if let Some(_) = label_table.get(&label_identifier) {
-                error_report.add(ParseErrorBuilder::new(
+                context.errors.add(ParseErrorBuilder::new(
                     ParseErrorType::LabelReassign,
                     label.start,
                     label.end,
@@ -52,16 +44,14 @@ fn get_label_table<'a>(
 fn convert_to_commands<'a>(
     text: &'a str,
     command_builder: &mut Vec<CommandBuilder>,
-    label_table: &LabelTable,
-    error_report: &mut ParseErrorReportBuilder,
-    line_table: &mut LineTable,
+    context: &mut ParseContext,
 ) -> Vec<Command> {
     let mut commands: Vec<Command> = Vec::with_capacity(command_builder.len());
 
     for command in command_builder {
-        match translate_command(text, command, &label_table, line_table) {
+        match translate_command(text, command, context) {
             Ok(command) => commands.push(command),
-            Err(error) => error_report.add(error),
+            Err(error) => context.errors.add(error),
         }
     }
     commands
@@ -70,27 +60,28 @@ fn convert_to_commands<'a>(
 fn translate_command<'a>(
     text: &'a str,
     command: &mut CommandBuilder,
-    label_table: &LabelTable,
-    line_table: &mut LineTable,
+    context: &mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     let instruction = command.instruction.resolve(text).to_uppercase();
 
-    let operant: usize = resolve_operant(text, command, label_table)?;
+    let operant: usize = resolve_operant(text, command, context)?;
 
     match instruction.as_str() {
         "NOP" => Ok(Command::new(
             Instruction::NOP,
             0,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         )),
-        "LDA" => translate_load_command(command, operant, line_table),
-        "STA" => translate_store_command(command, operant, line_table),
-        "ADD" => translate_add_command(command, operant, line_table),
-        "SUB" => translate_sub_command(command, operant, line_table),
-        "JMP" => translate_jmp_command(command, operant, line_table),
-        "BRZ" => translate_brz_command(command, operant, line_table),
-        "BRC" => translate_brc_command(command, operant, line_table),
-        "BRN" => translate_brn_command(command, operant, line_table),
+        "LDA" => translate_load_command(command, operant, context),
+        "STA" => translate_store_command(command, operant, context),
+        "ADD" => translate_add_command(command, operant, context),
+        "SUB" => translate_sub_command(command, operant, context),
+        "JMP" => translate_jmp_command(command, operant, context),
+        "BRZ" => translate_brz_command(command, operant, context),
+        "BRC" => translate_brc_command(command, operant, context),
+        "BRN" => translate_brn_command(command, operant, context),
         _ => Err(ParseErrorBuilder::new(
             ParseErrorType::InvalidInstruction,
             command.instruction.start,
@@ -102,12 +93,12 @@ fn translate_command<'a>(
 fn resolve_operant<'a>(
     text: &'a str,
     command: &CommandBuilder,
-    label_table: &LabelTable,
+    context: &'a mut ParseContext,
 ) -> Result<usize, ParseErrorBuilder> {
     let operant_value = command.operant.value.resolve(text);
 
     if command.operant.kind == OperantKind::Label {
-        if let Some(address) = label_table.get(operant_value) {
+        if let Some(address) = context.labels.get(operant_value) {
             return Ok(*address);
         } else {
             return Err(ParseErrorBuilder::new(
@@ -132,18 +123,22 @@ fn resolve_operant<'a>(
 fn translate_load_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Ok(Command::new(
             Instruction::LoadFix,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         )),
         OperantKind::Address => Ok(Command::new(
             Instruction::LoadFromRegister,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         )),
         OperantKind::Label => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedLabel,
@@ -158,7 +153,7 @@ fn translate_load_command<'a>(
 fn translate_store_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Err(ParseErrorBuilder::new(
@@ -169,7 +164,9 @@ fn translate_store_command<'a>(
         OperantKind::Address => Command::new(
             Instruction::SaveToRegister,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Label => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedLabel,
@@ -184,18 +181,22 @@ fn translate_store_command<'a>(
 fn translate_add_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Command::new(
             Instruction::AddFix,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Address => Command::new(
             Instruction::AddFromRegister,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Label => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedLabel,
@@ -210,18 +211,22 @@ fn translate_add_command<'a>(
 fn translate_sub_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Command::new(
             Instruction::SubFix,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Address => Command::new(
             Instruction::SubFromRegister,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Label => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedLabel,
@@ -236,13 +241,15 @@ fn translate_sub_command<'a>(
 fn translate_jmp_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Command::new(
             Instruction::JMP,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Address => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedAddress,
@@ -252,7 +259,9 @@ fn translate_jmp_command<'a>(
         OperantKind::Label => Command::new(
             Instruction::JMP,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
     })
 }
@@ -261,13 +270,15 @@ fn translate_jmp_command<'a>(
 fn translate_brz_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Command::new(
             Instruction::BRZ,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Address => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedAddress,
@@ -287,13 +298,15 @@ fn translate_brz_command<'a>(
 fn translate_brc_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Command::new(
             Instruction::BRC,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Address => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedAddress,
@@ -313,13 +326,15 @@ fn translate_brc_command<'a>(
 fn translate_brn_command<'a>(
     command: &mut CommandBuilder,
     operant: usize,
-    line_table: &mut LineTable,
+    context: &'a mut ParseContext,
 ) -> Result<Command, ParseErrorBuilder> {
     Ok(match command.operant.kind {
         OperantKind::Fixed => Command::new(
             Instruction::BRN,
             operant,
-            line_table.get_line_index_of(command.instruction.start),
+            context
+                .line_table
+                .get_line_index_of(command.instruction.start),
         ),
         OperantKind::Address => Err(ParseErrorBuilder::new(
             ParseErrorType::NotAllowedAddress,

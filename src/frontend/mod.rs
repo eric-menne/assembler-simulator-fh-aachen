@@ -1,4 +1,4 @@
-use std::usize;
+use std::{collections::HashMap, usize};
 
 use crate::error::{ParseErrorReport, ParseErrorReportBuilder};
 use lexer::tokenize;
@@ -18,7 +18,7 @@ mod test;
 /// Translate a string to an executable list of commands
 ///
 /// This function takes a str containing source code, tokenizes it, parses the tokens,
-/// and resolves them into executable commands. 
+/// and resolves them into executable commands.
 /// If errors occur an list of error will be returned after all steps has been done.
 ///
 /// # Example
@@ -32,21 +32,15 @@ mod test;
 /// let commands = compile(text).unwrap();
 /// ```
 pub fn compile(text: &str) -> Result<Vec<Command>, ParseErrorReport> {
-    let mut error_report = ParseErrorReportBuilder::new();
-    let mut line_table: LineTable = LineTable::new();
+    let mut context = ParseContext::new_empty();
 
-    let tokens = tokenize(text, &mut line_table);
-    let mut command_builder = parse_token(&tokens, &mut error_report);
-    let commands = resolve(
-        &text,
-        &mut command_builder,
-        &mut error_report,
-        &mut line_table,
-    );
+    let tokens = tokenize(text, &mut context);
+    let mut command_builder = parse_token(&tokens, &mut context);
+    let commands = resolve(&text, &mut command_builder, &mut context);
 
-    match error_report.is_successful() {
+    match context.errors.is_successful() {
         true => Ok(commands),
-        false => Err(error_report.build(text, &line_table)),
+        false => Err(context.errors.build(text, &context.line_table)),
     }
 }
 
@@ -84,4 +78,21 @@ impl LineTable {
 pub(crate) struct LineInfo {
     pub start: usize,
     pub end: usize,
+}
+
+#[derive(Debug)]
+pub(crate) struct ParseContext<'a> {
+    pub errors: ParseErrorReportBuilder,
+    pub line_table: LineTable,
+    pub labels: HashMap<&'a str, usize>,
+}
+
+impl ParseContext<'_> {
+    pub fn new_empty() -> Self {
+        Self {
+            errors: ParseErrorReportBuilder::new(),
+            line_table: LineTable::new(),
+            labels: HashMap::new(),
+        }
+    }
 }
