@@ -115,5 +115,9 @@ where
         }
         cursor.next();
     }
+    if start == end {
+        return Token::new_multi(TokenType::Number, start, start + 1);
+    }
+
     Token::new_multi(TokenType::Number, start, end)
 }

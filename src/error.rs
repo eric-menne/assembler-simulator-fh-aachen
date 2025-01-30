@@ -104,7 +104,7 @@ impl ParseErrorBuilder {
     pub(crate) fn build(self, text: &str, line_table: &LineTable) -> ParseError {
         let line_number = line_table.get_line_index_of(self.start);
         let line_bounds = line_table.get_line_of(self.start);
-        let line_text = &text[(line_bounds.0 + 1) ..line_bounds.1];
+        let line_text = &text[(line_bounds.0 + 1)..line_bounds.1];
         ParseError {
             kind: self.kind,
             start: self.start - line_bounds.0 - 1,

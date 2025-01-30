@@ -28,3 +28,12 @@ fn test_compiled_commands() {
 
     assert_eq!(expected_commands, commands.unwrap(),)
 }
+
+#[test]
+fn test_single_line_commpile() {
+    let code = "ADD #1";
+    let expected_command = vec![Command::new(Instruction::AddFix, 1, 0)];
+
+    let command = compile(&code).unwrap();
+    assert_eq!(expected_command, command);
+}

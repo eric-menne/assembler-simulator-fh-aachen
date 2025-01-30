@@ -72,7 +72,7 @@ impl LineTable {
 
     pub fn get_line_of(&self, position: usize) -> (usize, usize) {
         for line in &self.0 {
-            if position >= line.start && position <= line.end {
+            if position >= line.start && position <= (line.end + 1) {
                 return (line.start, line.end);
             }
         }
