@@ -8,6 +8,9 @@ use crate::error::{ParseErrorBuilder, ParseErrorType};
 
 type LabelTable<'a> = HashMap<&'a str, usize>;
 
+// TODO: replace `text` with context
+// TODO: remove validation of operants
+
 pub(super) fn resolve<'a>(
     text: &'a str,
     command_builder: &mut Vec<CommandBuilder>,

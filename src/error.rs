@@ -64,6 +64,7 @@ pub enum ParseErrorType {
     InvalidInstruction,
     InvalidOperant,
     // InvalidFixNumberType,
+    InvalidToken,
 
     //Not allowed
     NotAllowedAddress,
@@ -77,18 +78,19 @@ pub enum ParseErrorType {
 impl Display for ParseErrorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParseErrorType::MissingOperant => write!(f, "Missing operand."),
-            ParseErrorType::MissingInstruction => write!(f, "Missing instruction."),
-            ParseErrorType::MissingLabel => write!(f, "Missing label."),
-            ParseErrorType::MissingParenthesisClose => write!(f, "Missing closing parenthesis."),
-            ParseErrorType::InvalidFixNumber => write!(f, "Invalid fix number."),
-            ParseErrorType::InvalidAddress => write!(f, "Invalid address."),
-            ParseErrorType::InvalidInstruction => write!(f, "Invalid instruction."),
-            ParseErrorType::InvalidOperant => write!(f, "Invalid operand."),
-            ParseErrorType::NotAllowedAddress => write!(f, "Not allowed address."),
-            ParseErrorType::NotAllowedFixNumber => write!(f, "Not allowed fix number."),
-            ParseErrorType::NotAllowedLabel => write!(f, "Not allowed label."),
-            ParseErrorType::LabelReassign => write!(f, "Label reassignment not allowed."),
+            ParseErrorType::MissingOperant => write!(f, "Missing operand"),
+            ParseErrorType::MissingInstruction => write!(f, "Missing instruction"),
+            ParseErrorType::MissingLabel => write!(f, "Missing label"),
+            ParseErrorType::MissingParenthesisClose => write!(f, "Missing closing parenthesis"),
+            ParseErrorType::InvalidFixNumber => write!(f, "Invalid fix number"),
+            ParseErrorType::InvalidAddress => write!(f, "Invalid address"),
+            ParseErrorType::InvalidInstruction => write!(f, "Invalid instruction"),
+            ParseErrorType::InvalidOperant => write!(f, "Invalid operand"),
+            ParseErrorType::NotAllowedAddress => write!(f, "Not allowed address"),
+            ParseErrorType::NotAllowedFixNumber => write!(f, "Not allowed fix number"),
+            ParseErrorType::NotAllowedLabel => write!(f, "Not allowed label"),
+            ParseErrorType::LabelReassign => write!(f, "Label reassignment not allowed"),
+            ParseErrorType::InvalidToken => write!(f, "Invalid Token"),
         }
     }
 }

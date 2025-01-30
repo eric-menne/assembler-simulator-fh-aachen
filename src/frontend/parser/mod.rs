@@ -1,62 +1,48 @@
-use super::{lexer::token::{Token, TokenType}, ParseContext};
+use super::{
+    lexer::token::{Token, TokenType},
+    ParseContext,
+};
 use command_builder::CommandBuilder;
 
-use crate::error::{ParseErrorBuilder, ParseErrorReportBuilder, ParseErrorType};
+use crate::{
+    commands::{get_instruction_attribute, InstructionAttribute},
+    error::{ParseErrorBuilder, ParseErrorType},
+};
 use operant::{Operant, OperantKind};
 use std::iter::Peekable;
 
 pub mod command_builder;
 pub mod operant;
-
 pub fn parse_token<'a>(
     tokens: &'a Vec<Token>,
-    context: &mut ParseContext
+    context: &mut ParseContext,
 ) -> Vec<CommandBuilder<'a>> {
+    let mut commands: Vec<CommandBuilder> = vec![];
     let mut cursor = tokens.iter().peekable();
-    let mut nodes: Vec<CommandBuilder> = vec![];
 
-    skip_white_space(&mut cursor);
-
-    loop {
-        let command = parse_command(&mut cursor, context);
-        match command {
-            Some(c) => nodes.push(c),
-            None => move_to_next_line(&mut cursor),
+    while let Some(peek) = cursor.peek() {
+        if peek.token_type == TokenType::End {
+            break;
         }
-
-        skip_white_space(&mut cursor);
-
-        if let Some(next_peek) = cursor.peek() {
-            match next_peek.token_type {
-                TokenType::End => break,
-                _ => {}
-            }
+        skip_empty_lines(&mut cursor);
+        if let Some(command) = parse_line(&mut cursor, context) {
+            commands.push(command);
+            finish_line(&mut cursor, context);
+        } else {
+            recover_to_next_line(&mut cursor);
+            skip_empty_lines(&mut cursor);
         }
     }
-
-    nodes
+    commands
 }
 
-fn move_to_next_line<'a, I>(cursor: &mut Peekable<I>)
+// Skips empty line until next is not new line
+fn skip_empty_lines<'a, I>(cursor: &mut Peekable<I>)
 where
     I: Iterator<Item = &'a Token>,
 {
-    while let Some(t) = cursor.peek() {
-        match t.token_type {
-            TokenType::NewLine | TokenType::End => break,
-            _ => {
-                cursor.next();
-            }
-        }
-    }
-}
-
-fn skip_white_space<'a, I>(cursor: &mut Peekable<I>)
-where
-    I: Iterator<Item = &'a Token>,
-{
-    while let Some(t) = cursor.peek() {
-        match t.token_type {
+    while let Some(next) = cursor.peek() {
+        match next.token_type {
             TokenType::NewLine => {
                 cursor.next();
             }
@@ -65,186 +51,264 @@ where
     }
 }
 
-fn parse_command<'a, I>(
+// Skips to the next lines
+// Reports all symbols on it way as errors
+fn finish_line<'a, I>(cursor: &mut Peekable<I>, context: &mut ParseContext)
+where
+    I: Iterator<Item = &'a Token>,
+{
+    while let Some(next) = cursor.peek() {
+        match next.token_type {
+            TokenType::NewLine => {
+                break;
+            }
+            TokenType::End => break,
+            _ => {
+                context.errors.add(ParseErrorBuilder::new(
+                    ParseErrorType::InvalidToken,
+                    next.start,
+                    next.end,
+                ));
+                cursor.next();
+            }
+        }
+    }
+}
+
+// Moves to the next line or end of file to recover from error
+fn recover_to_next_line<'a, I>(cursor: &mut Peekable<I>)
+where
+    I: Iterator<Item = &'a Token>,
+{
+    while let Some(next) = cursor.peek() {
+        match next.token_type {
+            TokenType::NewLine | TokenType::End => break,
+            _ => {
+                cursor.next();
+            }
+        }
+    }
+}
+
+fn parse_line<'a, I>(
     cursor: &mut Peekable<I>,
-    context: &mut ParseContext
+    context: &mut ParseContext,
 ) -> Option<CommandBuilder<'a>>
 where
     I: Iterator<Item = &'a Token>,
 {
-    let token = cursor.next()?;
-    token.ensure_type(TokenType::Symbol, || {
-        context.errors.add(ParseErrorBuilder::new(
-            ParseErrorType::MissingInstruction,
-            token.start,
-            token.end,
-        ));
+    // Check if first token is a symbol
+    let first_token = cursor.next()?;
+    first_token.ensure_type(TokenType::Symbol, || {
+        if first_token.token_type != TokenType::End {
+            context.errors.add(ParseErrorBuilder::new(
+                ParseErrorType::MissingInstruction,
+                first_token.start,
+                first_token.end,
+            ));
+        }
     })?;
 
-    let next_token = match cursor.peek() {
-        Some(t) => t,
-        None => {
+    // check if second symbol is an colon
+    let second_token = cursor.peek()?;
+    Some(match second_token.token_type {
+        TokenType::Symbol
+        | TokenType::ParenthesisOpen
+        | TokenType::Hash
+        | TokenType::Number => parse_command(cursor, context, None, first_token)?,
+        TokenType::Colon => {
+            cursor.next();
+            skip_empty_lines(cursor);
+            let third_token = cursor.next()?;
+            third_token.ensure_type(TokenType::Symbol, || {
+                context.errors.add(ParseErrorBuilder::new(
+                    ParseErrorType::MissingInstruction,
+                    third_token.start,
+                    third_token.end,
+                ));
+            })?;
+
+            parse_command(cursor, context, Some(first_token), third_token)?
+        }
+        _ => {
             context.errors.add(ParseErrorBuilder::new(
                 ParseErrorType::MissingOperant,
-                token.start,
-                token.end,
+                second_token.start,
+                second_token.end,
+            ));
+            return None;
+        }
+    })
+}
+
+fn parse_command<'a, I>(
+    cursor: &mut Peekable<I>,
+    context: &mut ParseContext,
+    label: Option<&'a Token>,
+    instruction: &'a Token,
+) -> Option<CommandBuilder<'a>>
+where
+    I: Iterator<Item = &'a Token>,
+{
+    let attributes = match get_instruction_attribute(instruction.resolve(context.text)) {
+        Some(attr) => attr,
+        None => {
+            context.errors.add(ParseErrorBuilder::new(
+                ParseErrorType::InvalidInstruction,
+                instruction.start,
+                instruction.end,
             ));
             return None;
         }
     };
 
-    match next_token.token_type {
-        TokenType::Colon => {
-            cursor.next();
-            cursor.next_if(|&t| t.token_type == TokenType::NewLine);
-
-            let instruction = match cursor.next() {
-                Some(t) => t,
-                None => {
-                    context.errors.add(ParseErrorBuilder::new(
-                        ParseErrorType::MissingInstruction,
-                        token.start,
-                        token.end,
-                    ));
-                    return None;
-                }
-            };
-            instruction.ensure_type(TokenType::Symbol, || {
-                context.errors.add(ParseErrorBuilder::new(
-                    ParseErrorType::MissingInstruction,
-                    token.start,
-                    token.end,
-                ));
-            })?;
-
-            let operant = match parse_operant(cursor, context) {
-                Some(o) => o,
-                None => {
-                    context.errors.add(ParseErrorBuilder::new(
-                        ParseErrorType::MissingOperant,
-                        token.start,
-                        token.end,
-                    ));
-                    return None;
-                }
-            };
-            return Some(CommandBuilder::new(Some(token), instruction, operant));
-        }
-        _ => {
-            let operant = match parse_operant(cursor, context) {
-                Some(o) => o,
-                None => {
-                    context.errors.add(ParseErrorBuilder::new(
-                        ParseErrorType::MissingOperant,
-                        token.start,
-                        token.end,
-                    ));
-                    return None;
-                }
-            };
-            return Some(CommandBuilder::new(None, token, operant));
-        }
+    if attributes.allow_no_operant() {
+        return Some(CommandBuilder::new(
+            label,
+            instruction,
+            Operant {
+                kind: OperantKind::Fixed,
+                value: instruction, // Reuse instruction as none value
+            },
+        ));
     }
+
+    let operant = parse_operant(cursor, context, instruction, &attributes)?;
+
+    Some(CommandBuilder::new(label, instruction, operant))
 }
 
 fn parse_operant<'a, I>(
     cursor: &mut Peekable<I>,
-    context: &mut ParseContext
+    context: &mut ParseContext,
+    instruction: &'a Token,
+    attributes: &InstructionAttribute,
 ) -> Option<Operant<'a>>
 where
     I: Iterator<Item = &'a Token>,
 {
-    let token = cursor.next()?;
-
-    match token.token_type {
-        TokenType::Symbol => {
-            cursor.next_if(|&t| t.token_type == TokenType::Colon);
-
-            return Some(Operant {
-                value: token,
-                kind: OperantKind::Label,
-            });
-        }
-        TokenType::Number => {
-            return Some(Operant {
-                value: token,
-                kind: OperantKind::Fixed,
-            });
-        }
-        TokenType::Hash => {
-            let number = match cursor.next() {
-                Some(t) => t,
-                None => {
-                    context.errors.add(ParseErrorBuilder::new(
-                        ParseErrorType::InvalidFixNumber,
-                        token.start,
-                        token.end,
-                    ));
-                    return None;
-                }
-            };
-
-            number.ensure_type(TokenType::Number, || {
-                context.errors.add(ParseErrorBuilder::new(
-                    ParseErrorType::InvalidFixNumber,
-                    number.start,
-                    number.end,
-                ));
-            })?;
-
-            return Some(Operant {
-                value: number,
-                kind: OperantKind::Fixed,
-            });
-        }
-        TokenType::ParenthesisOpen => {
-            let number_token = match cursor.next() {
-                Some(t) => t,
-                None => {
-                    context.errors.add(ParseErrorBuilder::new(
-                        ParseErrorType::InvalidAddress,
-                        token.start,
-                        token.end,
-                    ));
-                    return None;
-                }
-            };
-
-            number_token.ensure_type(TokenType::Number, || {
-                context.errors.add(ParseErrorBuilder::new(
-                    ParseErrorType::InvalidAddress,
-                    token.start,
-                    token.end,
-                ));
-            })?;
-
-            let close = match cursor.next() {
-                Some(t) => t,
-                None => {
-                    context.errors.add(ParseErrorBuilder::new(
-                        ParseErrorType::MissingParenthesisClose,
-                        token.start,
-                        number_token.end,
-                    ));
-                    return None;
-                }
-            };
-
-            close.ensure_type(TokenType::ParenthesisClose, || {
-                context.errors.add(ParseErrorBuilder::new(
-                    ParseErrorType::InvalidAddress,
-                    token.start,
-                    number_token.end,
-                ));
-            })?;
-
-            return Some(Operant {
-                value: number_token,
-                kind: OperantKind::Address,
-            });
-        }
-        _ => {
+    let first_token = match cursor.next() {
+        Some(t) => t,
+        None => {
+            context.errors.add(ParseErrorBuilder::new(
+                ParseErrorType::MissingOperant,
+                instruction.start,
+                instruction.end,
+            ));
             return None;
         }
-    }
+    };
+
+    Some(match first_token.token_type {
+        TokenType::ParenthesisOpen => {
+            if !attributes.allow_address() {
+                context.errors.add(ParseErrorBuilder::new(
+                    ParseErrorType::InvalidOperant,
+                    first_token.start,
+                    first_token.end,
+                ));
+                return None;
+            }
+            parse_operant_address(cursor, context)?
+        }
+        TokenType::Number => {
+            if !attributes.allow_fixed_number() {
+                context.errors.add(ParseErrorBuilder::new(
+                    ParseErrorType::InvalidOperant,
+                    first_token.start,
+                    first_token.end,
+                ));
+                return None;
+            }
+            Operant {
+                kind: OperantKind::Fixed,
+                value: first_token,
+            }
+        }
+        TokenType::Symbol => {
+            if !attributes.allow_label() {
+                context.errors.add(ParseErrorBuilder::new(
+                    ParseErrorType::InvalidOperant,
+                    first_token.start,
+                    first_token.end,
+                ));
+                return None;
+            }
+            Operant {
+                kind: OperantKind::Label,
+                value: first_token,
+            }
+        }
+        TokenType::Hash => {
+            if !attributes.allow_fixed_number() {
+                context.errors.add(ParseErrorBuilder::new(
+                    ParseErrorType::InvalidOperant,
+                    first_token.start,
+                    first_token.end,
+                ));
+                return None;
+            }
+            parse_operant_fixed(cursor, context)?
+        }
+        _ => {
+            context.errors.add(ParseErrorBuilder::new(
+                ParseErrorType::MissingOperant,
+                first_token.start,
+                first_token.end,
+            ));
+            return None;
+        }
+    })
+}
+
+fn parse_operant_fixed<'a, I>(
+    cursor: &mut Peekable<I>,
+    context: &mut ParseContext,
+) -> Option<Operant<'a>>
+where
+    I: Iterator<Item = &'a Token>,
+{
+    let first_token = cursor.next()?;
+    first_token.ensure_type(TokenType::Number, || {
+        context.errors.add(ParseErrorBuilder::new(
+            ParseErrorType::InvalidOperant,
+            first_token.start,
+            first_token.end,
+        ));
+    })?;
+
+    Some(Operant {
+        kind: OperantKind::Fixed,
+        value: first_token,
+    })
+}
+
+fn parse_operant_address<'a, I>(
+    cursor: &mut Peekable<I>,
+    context: &mut ParseContext,
+) -> Option<Operant<'a>>
+where
+    I: Iterator<Item = &'a Token>,
+{
+    let first_token = cursor.next()?;
+    first_token.ensure_type(TokenType::Number, || {
+        context.errors.add(ParseErrorBuilder::new(
+            ParseErrorType::InvalidOperant,
+            first_token.start,
+            first_token.end,
+        ));
+    })?;
+
+    let second_token = cursor.next()?;
+    second_token.ensure_type(TokenType::ParenthesisClose, || {
+        context.errors.add(ParseErrorBuilder::new(
+            ParseErrorType::MissingParenthesisClose,
+            second_token.start,
+            second_token.end,
+        ));
+    })?;
+    Some(Operant {
+        kind: OperantKind::Address,
+        value: first_token,
+    })
 }
