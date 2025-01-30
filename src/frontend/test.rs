@@ -2,7 +2,9 @@ use crate::commands::{Command, Instruction};
 
 use super::compile;
 
-const TOKEN_TEST_CODE: &str = "
+#[test]
+fn test_single_line_compile() {
+    let code = "
 low: 
      ADD (2)
      ADD (15) // test
@@ -12,8 +14,6 @@ up:  STA (15)
      JMP 0
 ";
 
-#[test]
-fn test_compiled_commands() {
     let expected_commands = vec![
         Command::new(Instruction::AddFromRegister, 2, 2),
         Command::new(Instruction::AddFromRegister, 15, 3),
@@ -23,17 +23,54 @@ fn test_compiled_commands() {
         Command::new(Instruction::JMP, 0, 7),
     ];
 
-    let text = TOKEN_TEST_CODE;
-    let commands = compile(&text);
+    let result = compile(&code);
 
-    assert_eq!(expected_commands, commands.unwrap(),)
+    match result {
+        Ok(commands) => {
+            assert_eq!(expected_commands, commands)
+        }
+        Err(err) => panic!("{:#?}", err),
+    }
 }
 
 #[test]
-fn test_single_line_commpile() {
+fn test_compile_single_line() {
     let code = "ADD #1";
     let expected_command = vec![Command::new(Instruction::AddFix, 1, 0)];
 
-    let command = compile(&code).unwrap();
-    assert_eq!(expected_command, command);
+    let result = compile(&code);
+
+    match result {
+        Ok(commands) => {
+            assert_eq!(expected_command, commands)
+        }
+        Err(err) => panic!("{:#?}", err),
+    }
+}
+
+#[test]
+fn test_empty_line_compile() {
+    let code = "";
+    let expected_command: Vec<Command> = vec![];
+
+    let result = compile(&code);
+
+    match result {
+        Ok(commands) => {
+            assert_eq!(expected_command, commands)
+        }
+        Err(err) => panic!("{:#?}", err),
+    }
+}
+
+#[test]
+fn test_compile_invalid_multi_line_code() {
+    let code = "
+ADD #2 ADD #3
+";
+
+    assert!(
+        compile(&code).is_err(),
+        "Expected compilation to fail for multi-line instructions"
+    );
 }
