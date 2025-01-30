@@ -79,9 +79,7 @@ fn test_tokenize_single_line() {
 fn test_tokenize_empty() {
     let token_test_code: &str = "";
 
-    let token_expected_token: [TokenType; 1] = [
-        TokenType::End
-    ];
+    let token_expected_token: [TokenType; 1] = [TokenType::End];
 
     let text = String::from(token_test_code);
     let mut context = ParseContext::new_empty(&text);
