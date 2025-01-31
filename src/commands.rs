@@ -114,6 +114,7 @@ pub fn get_instruction_attribute(str: &str) -> Option<InstructionAttribute> {
 /// - Bit 6 (7th bit): Don't care
 /// - Bit 7 (8th bit): Don't care
 ///
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct InstructionAttribute(u8);
 
 impl From<u8> for InstructionAttribute {

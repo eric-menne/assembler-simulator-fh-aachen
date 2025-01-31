@@ -36,7 +36,7 @@ pub fn compile(text: &str) -> Result<Vec<Command>, ParseErrorReport> {
 
     let tokens = tokenize(text, &mut context);
     let mut command_builder = parse_token(&tokens, &mut context);
-    let commands = resolve(&text, &mut command_builder, &mut context);
+    let commands = resolve(&mut command_builder, &mut context);
 
     match context.errors.is_successful() {
         true => Ok(commands),

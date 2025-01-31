@@ -4,14 +4,14 @@ use super::{operant::Operant, Token};
 pub(crate) struct CommandBuilder<'a> {
     pub(crate) label: Option<&'a Token>,
     pub(crate) instruction: &'a Token,
-    pub(crate) operant: Operant<'a>,
+    pub(crate) operant: Option<Operant<'a>>,
 }
 
 impl<'a> CommandBuilder<'a> {
     pub(crate) fn new(
         label: Option<&'a Token>,
         instruction: &'a Token,
-        operant: Operant<'a>,
+        operant: Option<Operant<'a>>,
     ) -> Self {
         Self {
             label,

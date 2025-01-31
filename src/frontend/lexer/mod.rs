@@ -84,16 +84,22 @@ where
 {
     let mut end = start;
 
-    while let Some((index, c)) = cursor.peek() {
-        match c {
-            '_' => (),
-            c if c.is_alphabetic() => (),
-            _ => {
-                end = *index;
-                break;
+    loop {
+        if let Some((index, c)) = cursor.peek() {
+            println!("Char {:?}\n index: {}", c, index);
+            match c {
+                '_' => {end = *index},
+                c if c.is_alphabetic() => {end = *index},
+                _ => {
+                    end = *index;
+                    break;
+                }
             }
+            cursor.next();
+        } else {
+            end += 1;
+            break;
         }
-        cursor.next();
     }
 
     Token::new_multi(TokenType::Symbol, start, end)

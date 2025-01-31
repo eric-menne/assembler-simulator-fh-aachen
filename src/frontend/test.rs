@@ -74,3 +74,24 @@ ADD #2 ADD #3
         "Expected compilation to fail for multi-line instructions"
     );
 }
+
+#[test]
+fn test_compile_optional_operant() {
+    let code = "
+ADD #1
+NOP";
+    let expected_commands = vec![
+        Command::new(Instruction::AddFix, 1, 1),
+        Command::new(Instruction::NOP, 0, 2),
+        Command::new(Instruction::JMP, 0, 3)
+    ];
+
+    let result = compile(code);
+
+    match result {
+        Ok(commands) => {
+            assert_eq!(expected_commands, commands)
+        }
+        Err(err) => panic!("{:#?}", err),
+    }
+}

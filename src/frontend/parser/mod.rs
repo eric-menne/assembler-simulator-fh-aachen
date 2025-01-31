@@ -112,10 +112,6 @@ where
     // check if second symbol is an colon
     let second_token = cursor.peek()?;
     Some(match second_token.token_type {
-        TokenType::Symbol
-        | TokenType::ParenthesisOpen
-        | TokenType::Hash
-        | TokenType::Number => parse_command(cursor, context, None, first_token)?,
         TokenType::Colon => {
             cursor.next();
             skip_empty_lines(cursor);
@@ -131,12 +127,7 @@ where
             parse_command(cursor, context, Some(first_token), third_token)?
         }
         _ => {
-            context.errors.add(ParseErrorBuilder::new(
-                ParseErrorType::MissingOperant,
-                second_token.start,
-                second_token.end,
-            ));
-            return None;
+            parse_command(cursor, context, None, first_token)?
         }
     })
 }
@@ -150,7 +141,9 @@ fn parse_command<'a, I>(
 where
     I: Iterator<Item = &'a Token>,
 {
-    let attributes = match get_instruction_attribute(instruction.resolve(context.text)) {
+    let attributes = match get_instruction_attribute(
+        instruction.resolve(context.text).to_uppercase().as_str(),
+    ) {
         Some(attr) => attr,
         None => {
             context.errors.add(ParseErrorBuilder::new(
@@ -163,19 +156,12 @@ where
     };
 
     if attributes.allow_no_operant() {
-        return Some(CommandBuilder::new(
-            label,
-            instruction,
-            Operant {
-                kind: OperantKind::Fixed,
-                value: instruction, // Reuse instruction as none value
-            },
-        ));
+        return Some(CommandBuilder::new(label, instruction, None));
     }
 
     let operant = parse_operant(cursor, context, instruction, &attributes)?;
 
-    Some(CommandBuilder::new(label, instruction, operant))
+    Some(CommandBuilder::new(label, instruction, Some(operant)))
 }
 
 fn parse_operant<'a, I>(
